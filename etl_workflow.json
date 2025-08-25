@@ -1,0 +1,878 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "url": "https://automation.claythonremboski.online/api/v1/executions",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "includeData",
+                            "value": "true"
+                        },
+                        {
+                            "name": "limit",
+                            "value": "=23"
+                        }
+                    ]
+                },
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "X-N8N-API-KEY",
+                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzE2NzA0Mi0wMGFmLTQzZDUtYmQ2NS01ZmQ3ZTk5MTIxZDciLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzQ1Nzg4MjA3fQ.1rmHWuQSu0uvaJ3-Zpc3JHy4ia8emC5pDQpstzjeZ-A"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                660,
+                240
+            ],
+            "id": "54c4cf60-bcc9-43dc-baad-92f4b3d00006",
+            "name": "get executions"
+        },
+        {
+            "parameters": {
+                "jsCode": "let execucao = $json;\n\nfunction calcularDuracao(startedAt, stoppedAt) {\n  let dataInicio = new Date(startedAt);\n  let dataFim = new Date(stoppedAt);\n\n  // Diferença em milissegundos\n  let diferencaMs = dataFim - dataInicio;\n  // Converter para segundos\n  let diferencaSegundos = diferencaMs / 1000;\n\n  return diferencaSegundos;\n}\n\nlet dataInicio = new Date(execucao.startedAt);\n\nlet resultado = {\n  idWorkflow: execucao.workflowId,\n  nomeWorkflow: execucao.workflowData.name,\n  finalizado: execucao.finished,\n  dia: dataInicio.getUTCDate(),\n  mes: dataInicio.getUTCMonth() + 1, // somar 1 pois começa do zero\n  ano: dataInicio.getUTCFullYear(),\n  hora: dataInicio.getUTCHours(),\n  minuto: dataInicio.getUTCMinutes(),\n  segundo: dataInicio.getUTCSeconds(),\n  duracao: calcularDuracao(execucao.startedAt, execucao.stoppedAt)\n};\n\nreturn resultado;\n"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                940,
+                320
+            ],
+            "id": "de4bf8d3-d00e-4c15-a73c-da0a4163fffd",
+            "name": "trata_dados_execucoes"
+        },
+        {
+            "parameters": {
+                "fieldToSplitOut": "data",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.splitOut",
+            "typeVersion": 1,
+            "position": [
+                660,
+                580
+            ],
+            "id": "97b8af4b-9295-418e-91b2-dc193cd7aa7b",
+            "name": "Split Out"
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [
+                920,
+                0
+            ],
+            "id": "82589aaa-6173-4dfb-8d01-81cd9771e5a4",
+            "name": "Loop Over Items"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_workflow, id_workflow_original from dim_workflow WHERE id_workflow_original='{{ $json.idWorkflow }}';",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1220,
+                60
+            ],
+            "id": "c0a227d0-53bc-4190-98ed-374d54787e83",
+            "name": "consulta dim_workflow",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "37211fe0-97ff-4878-8914-b01968694fe5",
+                            "leftValue": "={{ $json.id_workflow_original }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                1400,
+                60
+            ],
+            "id": "a1d6c64e-c697-4878-95b4-810ec33143d7",
+            "name": "se_vazio"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO dim_workflow (id_workflow_original, nome_workflow) VALUES ('{{ $('trata_dados_execucoes').item.json.idWorkflow }}', '{{ $('trata_dados_execucoes').item.json.nomeWorkflow }}');",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1620,
+                -40
+            ],
+            "id": "3fa09a73-c944-4ac1-b4e0-5654034333cb",
+            "name": "cadastra_novo_workflow",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_workflow, id_workflow_original from dim_workflow WHERE id_workflow_original='{{ $('trata_dados_execucoes').item.json.idWorkflow }}';",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1840,
+                -40
+            ],
+            "id": "1926e0af-40b3-4bd9-8c8d-20a4e457221e",
+            "name": "consulta_dim_workflow",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                2080,
+                80
+            ],
+            "id": "389c1680-7fe0-49d3-b42c-e9ee138f451f",
+            "name": "retorna_id_dim_workflow"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_data FROM dim_data WHERE dia = {{ $('trata_dados_execucoes').item.json.dia }} AND mes = {{ $('trata_dados_execucoes').item.json.mes }} AND ano = {{ $('trata_dados_execucoes').item.json.ano }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1220,
+                540
+            ],
+            "id": "89c80f8d-9335-40bf-a6eb-e38d96c20c90",
+            "name": "consulta dim_data",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO dim_data (ano, mes, dia) \nVALUES ({{ $('trata_dados_execucoes').item.json.ano }},{{ $('trata_dados_execucoes').item.json.mes }},  {{ $('trata_dados_execucoes').item.json.dia }});",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1620,
+                420
+            ],
+            "id": "4f78327e-ea1a-414b-a529-e28ee174dfa5",
+            "name": "insert_dim_data",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "triggerAtHour": 19,
+                            "triggerAtMinute": 35
+                        }
+                    ]
+                }
+            },
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [
+                660,
+                -60
+            ],
+            "id": "103719b2-f389-4d89-8360-2196d0994b57",
+            "name": "Schedule Trigger"
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "833bcbd0-60d2-4e96-8b52-14e534b1b23d",
+                            "name": "id_dim_workflow",
+                            "value": "={{ $('retorna_id_dim_workflow').item.json.id_dim_workflow }}",
+                            "type": "number"
+                        },
+                        {
+                            "id": "06ccdf00-248c-41a5-8eea-ae245dca9864",
+                            "name": "execution_data",
+                            "value": "={{ $('trata_dados_execucoes').item.json }}",
+                            "type": "object"
+                        },
+                        {
+                            "id": "26719e51-24ac-4136-a647-bc946b64b040",
+                            "name": "id_dim_hora",
+                            "value": "={{ $json.id_dim_hora }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "267e62d0-a987-432a-8234-929cdf9e1744",
+                            "name": "id_dim_data",
+                            "value": "={{ $('retorna_id_dim_data').item.json.id_dim_data }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                2740,
+                580
+            ],
+            "id": "41e109ba-6daa-45c4-aed0-8cb613ea8034",
+            "name": "mapeia_dados_etl"
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                2080,
+                560
+            ],
+            "id": "e916ecd9-ef5b-435f-8f5e-7ae47347c150",
+            "name": "retorna_id_dim_data"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_data FROM dim_data WHERE dia = {{ $('trata_dados_execucoes').item.json.dia }} AND mes = {{ $('trata_dados_execucoes').item.json.mes }} AND ano = {{ $('trata_dados_execucoes').item.json.ano }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1820,
+                420
+            ],
+            "id": "018ea392-b895-4525-8276-96c0708a380b",
+            "name": "consulta_dim_data",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "# DIMENSÃO DATA",
+                "height": 400,
+                "width": 1100,
+                "color": 4
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1160,
+                340
+            ],
+            "typeVersion": 1,
+            "id": "27ffd486-ea4a-465c-ac2f-667eae7612e3",
+            "name": "Sticky Note1"
+        },
+        {
+            "parameters": {
+                "content": "# DIMENSÃO WORKFLOW",
+                "height": 400,
+                "width": 1100,
+                "color": 5
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1160,
+                -100
+            ],
+            "typeVersion": 1,
+            "id": "4a3d0219-8ac3-4a6d-9b45-8fd950b00b0c",
+            "name": "Sticky Note2"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_hora FROM dim_hora WHERE hora = {{ $('trata_dados_execucoes').item.json.hora }} AND minuto = {{ $('trata_dados_execucoes').item.json.minuto }} AND segundo = {{ $('trata_dados_execucoes').item.json.segundo }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                2320,
+                60
+            ],
+            "id": "1c290f9d-e60f-4066-9273-8e3d8e2316f8",
+            "name": "consulta dim_hora",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO dim_hora (hora, minuto, segundo) \nVALUES ({{ $('trata_dados_execucoes').item.json.hora }},{{ $('trata_dados_execucoes').item.json.minuto }}, {{ $('trata_dados_execucoes').item.json.segundo }});",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                2740,
+                -80
+            ],
+            "id": "786aa8c7-5f09-41e0-a2a6-2c55eecb2d84",
+            "name": "insert_dim_hora",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_hora FROM dim_hora WHERE hora = {{ $('trata_dados_execucoes').item.json.hora }} AND minuto = {{ $('trata_dados_execucoes').item.json.minuto }} AND segundo = {{ $('trata_dados_execucoes').item.json.segundo }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                2920,
+                -80
+            ],
+            "id": "0dc6d2d4-f6bc-4afa-89ac-85fef900de45",
+            "name": "consulta dim_hora1",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                3160,
+                80
+            ],
+            "id": "5611b9e1-9813-4da7-ad7d-bbf87497abe8",
+            "name": "retorna_id_dim_hora"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO fato_execucao (\n    id_dim_workflow,\n    id_dim_data,\n    id_dim_hora,\n    duracao,\n    finalizada\n) VALUES (\n    {{ $json.id_dim_workflow }},              -- id_dim_workflow (ex: workflow \"exemplocorreto1\")\n    {{ $json.id_dim_data }},              -- id_dim_data (ex: 2025-04-15)\n    {{ $json.id_dim_hora }},             -- id_dim_hora (ex: 20:37:16)\n    {{ $json.execution_data.duracao }},           -- duração em segundos (ex: diferença entre startedAt e stoppedAt)\n     {{ $json.execution_data.finalizado }}          -- execução finalizada?\n);\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                2900,
+                580
+            ],
+            "id": "0c0aa57e-7c2f-450e-ad99-1a096597b5e8",
+            "name": "insere_fato",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "594ff784-6418-40c8-ba1f-f4cd938f6640",
+                            "leftValue": "={{ $json.id_dim_data }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "number",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                1400,
+                540
+            ],
+            "id": "4bf485a4-c02a-4057-8221-5f0868fc3b90",
+            "name": "se_data_nao_existe"
+        },
+        {
+            "parameters": {
+                "content": "# DIMENSÃO HORA",
+                "height": 400,
+                "width": 1040,
+                "color": 6
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2300,
+                -100
+            ],
+            "typeVersion": 1,
+            "id": "2bcc41d2-e4c7-4e76-9f32-1f6a6ef983f5",
+            "name": "Sticky Note4"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "594ff784-6418-40c8-ba1f-f4cd938f6640",
+                            "leftValue": "={{ $json.id_dim_hora }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "number",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                2520,
+                60
+            ],
+            "id": "23f8b379-4d28-4657-bb71-88e51ab5c455",
+            "name": "se_hora_nao_existe"
+        },
+        {
+            "parameters": {
+                "content": "# FATO EXECUÇÃO",
+                "height": 400,
+                "width": 1040
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2300,
+                340
+            ],
+            "typeVersion": 1,
+            "id": "2f61e461-e3a5-4c7a-9832-ed099d0bd1fd",
+            "name": "Sticky Note5"
+        },
+        {
+            "parameters": {
+                "content": "# LOAD",
+                "height": 80,
+                "width": 2160,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1180,
+                -200
+            ],
+            "typeVersion": 1,
+            "id": "1de3ebaa-9bd6-46d0-856d-37474a42266f",
+            "name": "Sticky Note6"
+        },
+        {
+            "parameters": {
+                "content": "# TRANSFOM",
+                "height": 940,
+                "width": 260,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                880,
+                -200
+            ],
+            "typeVersion": 1,
+            "id": "bfaa2cab-22ff-45d6-a17e-74297c7790cd",
+            "name": "Sticky Note7"
+        },
+        {
+            "parameters": {
+                "content": "# EXTRACT",
+                "height": 940,
+                "width": 260,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                580,
+                -200
+            ],
+            "typeVersion": 1,
+            "id": "7ecdf781-f38b-45f5-933d-92d7433cb16d",
+            "name": "Sticky Note8"
+        }
+    ],
+    "connections": {
+        "get executions": {
+            "main": [
+                [
+                    {
+                        "node": "Split Out",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "trata_dados_execucoes": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split Out": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Loop Over Items": {
+            "main": [
+                [],
+                [
+                    {
+                        "node": "trata_dados_execucoes",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "se_vazio",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_vazio": {
+            "main": [
+                [
+                    {
+                        "node": "cadastra_novo_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_id_dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "cadastra_novo_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "consulta_dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta_dim_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "retorna_id_dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_id_dim_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "se_data_nao_existe",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insert_dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "consulta_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Schedule Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "get executions",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "mapeia_dados_etl": {
+            "main": [
+                [
+                    {
+                        "node": "insere_fato",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_id_dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta_dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "retorna_id_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_hora": {
+            "main": [
+                [
+                    {
+                        "node": "se_hora_nao_existe",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insert_dim_hora": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_hora1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_hora1": {
+            "main": [
+                [
+                    {
+                        "node": "retorna_id_dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_id_dim_hora": {
+            "main": [
+                [
+                    {
+                        "node": "mapeia_dados_etl",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insere_fato": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_data_nao_existe": {
+            "main": [
+                [
+                    {
+                        "node": "insert_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_id_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_hora_nao_existe": {
+            "main": [
+                [
+                    {
+                        "node": "insert_dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_id_dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "a46402e6601b1a4fcde47d6199a3b63608f9b385f43509173dc38f13cc5fabab"
+    }
+}
