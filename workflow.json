@@ -1,0 +1,1953 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "url": "n8nUrlApi/executions",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "value": "250"
+                        },
+                        {
+                            "name": "includeData",
+                            "value": "true"
+                        }
+                    ]
+                },
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "X-N8N-API-KEY",
+                            "value": "n8nApiKey"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "fullResponse": true
+                        }
+                    }
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                2160,
+                120
+            ],
+            "id": "acdfde13-106a-4b22-b0c1-299836b5596a",
+            "name": "get executions",
+            "alwaysOutputData": true,
+            "onError": "continueRegularOutput"
+        },
+        {
+            "parameters": {
+                "jsCode": "let execucao = $json;\n\nfunction calcularDuracao(startedAt, stoppedAt) {\n  let dataInicio = new Date(startedAt);\n  let dataFim = new Date(stoppedAt);\n\n  // Diferença em milissegundos\n  let diferencaMs = dataFim - dataInicio;\n  // Converter para segundos\n  let diferencaSegundos = diferencaMs / 1000;\n\n  return diferencaSegundos;\n}\n\nlet dataInicio = new Date(execucao.startedAt);\n\nlet resultado = {\n  idWorkflow: execucao.workflowId,\n  nomeWorkflow: execucao.workflowData.name,\n  finalizado: execucao.finished,\n  dia: dataInicio.getUTCDate(),\n  mes: dataInicio.getUTCMonth() + 1, // somar 1 pois começa do zero\n  ano: dataInicio.getUTCFullYear(),\n  hora: dataInicio.getUTCHours(),\n  minuto: dataInicio.getUTCMinutes(),\n  segundo: dataInicio.getUTCSeconds(),\n  duracao: calcularDuracao(execucao.startedAt, execucao.stoppedAt)\n};\n\nreturn resultado;\n"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2640,
+                540
+            ],
+            "id": "2ed7213a-d9b4-4f5c-be3a-27522f5fd9b6",
+            "name": "trata_dados_execucoes"
+        },
+        {
+            "parameters": {
+                "fieldToSplitOut": "body.data",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.splitOut",
+            "typeVersion": 1,
+            "position": [
+                2340,
+                560
+            ],
+            "id": "282e47e4-bb4f-4fbc-9e1e-cb5bb0e41af2",
+            "name": "Split Out"
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [
+                2620,
+                -120
+            ],
+            "id": "94d07632-abe7-43d2-9f62-27b4f34a4632",
+            "name": "Loop Over Items"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_workflow, id_workflow_original from dim_workflow WHERE id_workflow_original='{{ $json.idWorkflow }}';",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                2880,
+                40
+            ],
+            "id": "7dc132ac-7c29-4711-bb7c-ca0b8fb9d4b6",
+            "name": "consulta dim_workflow",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "37211fe0-97ff-4878-8914-b01968694fe5",
+                            "leftValue": "={{ $json.id_workflow_original }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                3060,
+                40
+            ],
+            "id": "3bae44e8-bc43-4c37-b004-f862910efca8",
+            "name": "se_vazio"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO dim_workflow (id_workflow_original, nome_workflow) VALUES ('{{ $('trata_dados_execucoes').item.json.idWorkflow }}', '{{ $('trata_dados_execucoes').item.json.nomeWorkflow }}');",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                3280,
+                -60
+            ],
+            "id": "a601509f-2af0-4ee9-92a4-d0818aac60bc",
+            "name": "cadastra_novo_workflow",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_workflow, id_workflow_original from dim_workflow WHERE id_workflow_original='{{ $('trata_dados_execucoes').item.json.idWorkflow }}';",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                3500,
+                -60
+            ],
+            "id": "36223bfe-c1e5-4076-996e-8f2df5e90361",
+            "name": "consulta_dim_workflow",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                3740,
+                60
+            ],
+            "id": "2e6b5e6b-15fd-4fbf-8782-42aef5404d0f",
+            "name": "retorna_id_dim_workflow"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_data FROM dim_data WHERE dia = {{ $('trata_dados_execucoes').item.json.dia }} AND mes = {{ $('trata_dados_execucoes').item.json.mes }} AND ano = {{ $('trata_dados_execucoes').item.json.ano }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                2900,
+                500
+            ],
+            "id": "77559324-f558-4a13-9192-53d2ad44e291",
+            "name": "consulta dim_data",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO dim_data (ano, mes, dia) \nVALUES ({{ $('trata_dados_execucoes').item.json.ano }},{{ $('trata_dados_execucoes').item.json.mes }},  {{ $('trata_dados_execucoes').item.json.dia }});",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                3300,
+                380
+            ],
+            "id": "2a0f62bb-bb20-422e-ad17-cc1d96cb8ed8",
+            "name": "insert_dim_data",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "833bcbd0-60d2-4e96-8b52-14e534b1b23d",
+                            "name": "id_dim_workflow",
+                            "value": "={{ $('retorna_id_dim_workflow').item.json.id_dim_workflow }}",
+                            "type": "number"
+                        },
+                        {
+                            "id": "06ccdf00-248c-41a5-8eea-ae245dca9864",
+                            "name": "execution_data",
+                            "value": "={{ $('trata_dados_execucoes').item.json }}",
+                            "type": "object"
+                        },
+                        {
+                            "id": "26719e51-24ac-4136-a647-bc946b64b040",
+                            "name": "id_dim_hora",
+                            "value": "={{ $json.id_dim_hora }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "267e62d0-a987-432a-8234-929cdf9e1744",
+                            "name": "id_dim_data",
+                            "value": "={{ $('retorna_id_dim_data').item.json.id_dim_data }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                4100,
+                540
+            ],
+            "id": "36fc35b9-9a37-433d-983c-858f8628dcf2",
+            "name": "mapeia_dados_etl"
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                3760,
+                520
+            ],
+            "id": "27aa62b5-9bdf-4941-827b-a0dea426b8b9",
+            "name": "retorna_id_dim_data"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_data FROM dim_data WHERE dia = {{ $('trata_dados_execucoes').item.json.dia }} AND mes = {{ $('trata_dados_execucoes').item.json.mes }} AND ano = {{ $('trata_dados_execucoes').item.json.ano }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                3500,
+                380
+            ],
+            "id": "7a4c3495-3dbf-4cdc-93e4-a94456fb54fe",
+            "name": "consulta_dim_data",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "# DIMENSÃO DATA",
+                "height": 400,
+                "width": 1100,
+                "color": 4
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2820,
+                320
+            ],
+            "typeVersion": 1,
+            "id": "3ed662ca-6b34-421d-b876-dfe23c0c6422",
+            "name": "Sticky Note1"
+        },
+        {
+            "parameters": {
+                "content": "# DIMENSÃO WORKFLOW",
+                "height": 400,
+                "width": 1100,
+                "color": 5
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2820,
+                -120
+            ],
+            "typeVersion": 1,
+            "id": "45ee9480-fd83-411f-b1a1-e4c384304e76",
+            "name": "Sticky Note2"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_hora FROM dim_hora WHERE hora = {{ $('trata_dados_execucoes').item.json.hora }} AND minuto = {{ $('trata_dados_execucoes').item.json.minuto }} AND segundo = {{ $('trata_dados_execucoes').item.json.segundo }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                4020,
+                40
+            ],
+            "id": "2daf486a-a5fa-46be-8bb9-691bd5891c67",
+            "name": "consulta dim_hora",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO dim_hora (hora, minuto, segundo) \nVALUES ({{ $('trata_dados_execucoes').item.json.hora }},{{ $('trata_dados_execucoes').item.json.minuto }}, {{ $('trata_dados_execucoes').item.json.segundo }});",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                4440,
+                -100
+            ],
+            "id": "0f6a68fd-afb3-4c15-80a5-8198702b4131",
+            "name": "insert_dim_hora",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id_dim_hora FROM dim_hora WHERE hora = {{ $('trata_dados_execucoes').item.json.hora }} AND minuto = {{ $('trata_dados_execucoes').item.json.minuto }} AND segundo = {{ $('trata_dados_execucoes').item.json.segundo }};",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                4620,
+                -100
+            ],
+            "id": "0e8b540f-88f3-4f88-94f2-a92f6d486ac1",
+            "name": "consulta dim_hora1",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                4860,
+                60
+            ],
+            "id": "992537a9-8e83-4ab9-91ce-36c31ab82c9a",
+            "name": "retorna_id_dim_hora"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO fato_execucao (\n    id_dim_workflow,\n    id_dim_data,\n    id_dim_hora,\n    duracao,\n    finalizada\n) VALUES (\n    {{ $json.id_dim_workflow }},              -- id_dim_workflow (ex: workflow \"exemplocorreto1\")\n    {{ $json.id_dim_data }},              -- id_dim_data (ex: 2025-04-15)\n    {{ $json.id_dim_hora }},             -- id_dim_hora (ex: 20:37:16)\n    {{ $json.execution_data.duracao }},           -- duração em segundos (ex: diferença entre startedAt e stoppedAt)\n     {{ $json.execution_data.finalizado }}          -- execução finalizada?\n);\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                4380,
+                540
+            ],
+            "id": "9f9058db-d380-43ee-9dd1-a71e541c149c",
+            "name": "insere_fato",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "594ff784-6418-40c8-ba1f-f4cd938f6640",
+                            "leftValue": "={{ $json.id_dim_data }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "number",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                3080,
+                500
+            ],
+            "id": "59b6cbef-e057-483e-b8d6-03f60c4e596a",
+            "name": "se_data_nao_existe"
+        },
+        {
+            "parameters": {
+                "content": "# DIMENSÃO HORA",
+                "height": 400,
+                "width": 1040,
+                "color": 6
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                3960,
+                -120
+            ],
+            "typeVersion": 1,
+            "id": "d82bea4f-ccb9-4473-b5fc-52393d117eac",
+            "name": "Sticky Note4"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "594ff784-6418-40c8-ba1f-f4cd938f6640",
+                            "leftValue": "={{ $json.id_dim_hora }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "number",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                4220,
+                40
+            ],
+            "id": "006c7b05-58ef-4bde-b0a7-544ee0276ab9",
+            "name": "se_hora_nao_existe"
+        },
+        {
+            "parameters": {
+                "content": "# FATO EXECUÇÃO",
+                "height": 400,
+                "width": 1040
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                3960,
+                320
+            ],
+            "typeVersion": 1,
+            "id": "6cde5e2d-9bad-4a3c-9030-080d45192c11",
+            "name": "Sticky Note5"
+        },
+        {
+            "parameters": {
+                "content": "# LOAD",
+                "height": 80,
+                "width": 2160,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2840,
+                -220
+            ],
+            "typeVersion": 1,
+            "id": "440b7c3c-9906-413c-9e67-4685765bffdb",
+            "name": "Sticky Note6"
+        },
+        {
+            "parameters": {
+                "content": "# TRANSFOM",
+                "height": 940,
+                "width": 260,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2540,
+                -220
+            ],
+            "typeVersion": 1,
+            "id": "716c2658-9a28-414b-baca-f5f9285b1613",
+            "name": "Sticky Note7"
+        },
+        {
+            "parameters": {
+                "content": "# EXTRACT",
+                "height": 940,
+                "width": 1460,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1040,
+                -220
+            ],
+            "typeVersion": 1,
+            "id": "a5b99dc4-1169-4cfb-91c3-04d42a36b8f7",
+            "name": "Sticky Note8"
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                -480
+            ],
+            "id": "ec807366-9aec-4ae9-81b8-9cc7153962ac",
+            "name": "When clicking ‘Test workflow’",
+            "disabled": true
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                2180,
+                -620
+            ],
+            "id": "5442b3ad-48ed-45ad-87f8-f6cd9407dd25",
+            "name": "run"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "DROP TABLE IF EXISTS fato_execucao;\nDROP TABLE IF EXISTS dim_data;\nDROP TABLE IF EXISTS dim_hora;\nDROP TABLE IF EXISTS dim_workflow;\nDROP TABLE IF EXISTS etl_watermarks;\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1320,
+                -600
+            ],
+            "id": "b8a62969-275d-4f93-94c1-a177b2fe23c2",
+            "name": "remove_tabelas",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "CREATE TABLE dim_data (\n    id_dim_data SERIAL PRIMARY KEY,\n    ano SMALLINT NOT NULL,\n    mes SMALLINT NOT NULL,\n    dia SMALLINT NOT NULL\n);\n\nCREATE TABLE dim_hora (\n    id_dim_hora SERIAL PRIMARY KEY,\n    hora SMALLINT NOT NULL,\n    minuto SMALLINT NOT NULL,\n    segundo SMALLINT NOT NULL\n);\n\nCREATE TABLE dim_workflow (\n    id_dim_workflow SERIAL PRIMARY KEY,\n    id_workflow_original VARCHAR(50) NOT NULL,\n    nome_workflow VARCHAR(255) NOT NULL\n);",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1540,
+                -460
+            ],
+            "id": "d332d6b0-7c89-4191-b3c1-6531e302584c",
+            "name": "cria_tabelas_dimensao",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "CREATE TABLE fato_execucao (\n    id_dim_workflow INTEGER NOT NULL,\n    id_dim_data INTEGER NOT NULL,\n    id_dim_hora INTEGER NOT NULL,\n    duracao FLOAT NOT NULL,\n    finalizada BOOLEAN NOT NULL,\n    \n    CONSTRAINT fk_dim_workflow FOREIGN KEY (id_dim_workflow) REFERENCES dim_workflow(id_dim_workflow),\n    CONSTRAINT fk_data FOREIGN KEY (id_dim_data) REFERENCES dim_data(id_dim_data),\n    CONSTRAINT fk_hora FOREIGN KEY (id_dim_hora) REFERENCES dim_hora(id_dim_hora)\n);",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1740,
+                -620
+            ],
+            "id": "1ea97554-8b63-4940-9997-d9537ecd1ef8",
+            "name": "cria_tabela_fato",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "# CRIAÇÃO DE TABELAS",
+                "height": 440,
+                "width": 1620,
+                "color": 4
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1040,
+                -700
+            ],
+            "typeVersion": 1,
+            "id": "2d33f095-3292-4ad7-a464-f19cd09095e8",
+            "name": "Sticky Note9"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "CREATE TABLE etl_watermarks (\n    last_run_timestamp TIMESTAMP(3)\n);",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1940,
+                -460
+            ],
+            "id": "0d047f3e-1f05-4d98-a67f-f3a51ddf816f",
+            "name": "cria_tabela_watermarks",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "seconds",
+                            "secondsInterval": 10
+                        }
+                    ]
+                }
+            },
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [
+                1080,
+                160
+            ],
+            "id": "9bcacf56-7c06-46bb-86f2-3d877bbeb827",
+            "name": "Cron"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM etl_watermarks;",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1300,
+                40
+            ],
+            "id": "386da103-35c9-4b6a-8678-ae672f22e2d0",
+            "name": "verifica_watermarks",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "228e2a4b-406a-4858-b0cd-3dd2c0384133",
+                            "leftValue": "={{ $json.last_run_timestamp }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "dateTime",
+                                "operation": "notExists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                1320,
+                280
+            ],
+            "id": "0af70ab1-9757-442a-9167-b4e23ffde92a",
+            "name": "se_timestamp_vazio"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO etl_watermarks (last_run_timestamp)\nVALUES ('{{ $('formata_timestamp').item.json.timestamp }}');",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1660,
+                -140
+            ],
+            "id": "59168bc3-b395-4b46-b1d4-024c9281e159",
+            "name": "insere_watermark",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "let timestamp = $input.first().json.timestamp\n\nfunction toUTCFormat(ts) {\n  let date = new Date(ts)\n    return date.toISOString()\n}\n\nreturn {\n  timestamp: toUTCFormat(timestamp)\n}\n"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1300,
+                -160
+            ],
+            "id": "c5b78ef0-6a70-4027-acc1-e9dd357ec48d",
+            "name": "formata_timestamp"
+        },
+        {
+            "parameters": {
+                "jsCode": "let timestamp = $('verifica_watermarks').first().json.last_run_timestamp ?? null;\n\nreturn {\n  timestamp,\n  firstExecution: timestamp === null\n};\n"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2160,
+                -120
+            ],
+            "id": "1e895af9-e8cc-4af9-9fc8-00488e0a1f9e",
+            "name": "retorna_timestamp"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "UPDATE etl_watermarks SET  last_run_timestamp = '{{ $('formata_timestamp').item.json.timestamp }}';",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1320,
+                540
+            ],
+            "id": "1e384647-09c9-4a79-a3e8-38a1745ee3dd",
+            "name": "atualiza_watermark",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "getTimeBetweenDates",
+                "startDate": "={{ $('verifica_watermarks').item.json.last_run_timestamp }}",
+                "endDate": "={{ $('formata_timestamp').item.json.timestamp }}",
+                "units": [
+                    "second"
+                ],
+                "options": {}
+            },
+            "type": "n8n-nodes-base.dateTime",
+            "typeVersion": 2,
+            "position": [
+                1660,
+                300
+            ],
+            "id": "a0370526-a302-402f-ae0f-357779540136",
+            "name": "subtrai_segundos"
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                1940,
+                -140
+            ],
+            "id": "d8145e36-904d-44ae-8f2d-a19a6f9ca07b",
+            "name": "No Operation, do nothing1"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "2688c444-714e-4b62-b6d5-7f2302cc5b7c",
+                            "leftValue": "={{ $json.startedAt }}",
+                            "rightValue": "={{ $('retorna_timestamp').item.json.timestamp }}",
+                            "operator": {
+                                "type": "dateTime",
+                                "operation": "before"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                2620,
+                140
+            ],
+            "id": "9dcde808-7a37-45d7-a3a3-c1cc4b892397",
+            "name": "se_antes_do_timer"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "8a21be38-aecc-4f08-b4d8-e432501989e5",
+                            "leftValue": "={{ $json.timeDifference.seconds }}",
+                            "rightValue": 10.5,
+                            "operator": {
+                                "type": "number",
+                                "operation": "gt"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                1700,
+                540
+            ],
+            "id": "03c3db1e-93e2-4e68-adf0-1ef28b926777",
+            "name": "se_diferença_maior_que_10_segundos"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "a235131b-b509-43df-b9d2-645029564948",
+                            "leftValue": "={{ $json.statusCode }}",
+                            "rightValue": 200,
+                            "operator": {
+                                "type": "number",
+                                "operation": "notEquals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                2160,
+                340
+            ],
+            "id": "d1bc7fc9-554d-449b-9dec-c449ccbb117a",
+            "name": "se_falhou"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "-- Os 5 workflows com maior número de falhas nos últimos 7 dias\nWITH data_atual AS (\n    SELECT CURRENT_DATE AS hoje\n)\nSELECT \n    w.nome_workflow,\n    w.id_workflow_original,\n    COUNT(*) AS total_falhas,\n    '7 dias' AS periodo\nFROM \n    fato_execucao fe\nJOIN \n    dim_workflow w ON fe.id_dim_workflow = w.id_dim_workflow\nJOIN \n    dim_data d ON fe.id_dim_data = d.id_dim_data\nJOIN \n    data_atual da ON TRUE\nWHERE \n    fe.finalizada = FALSE AND\n    (d.ano * 10000 + d.mes * 100 + d.dia) >= \n    (EXTRACT(YEAR FROM da.hoje) * 10000 + EXTRACT(MONTH FROM da.hoje) * 100 + EXTRACT(DAY FROM da.hoje)) - 7\nGROUP BY \n    w.nome_workflow, w.id_workflow_original\nORDER BY \n    total_falhas DESC\nLIMIT 5;",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1660,
+                -1980
+            ],
+            "id": "c1557886-9f63-4fc4-999d-128708d965fd",
+            "name": "top 5 falhas 7 dias",
+            "alwaysOutputData": true,
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "-- Os 5 workflows com maior duração média nos últimos 7 dias\nWITH data_atual AS (\n    SELECT CURRENT_DATE AS hoje\n)\nSELECT \n    w.nome_workflow,\n    w.id_workflow_original,\n    ROUND(AVG(fe.duracao)::NUMERIC, 3) AS duracao_media,\n    COUNT(*) AS total_execucoes,\n    '7 dias' AS periodo\nFROM fato_execucao fe\nJOIN dim_workflow w ON fe.id_dim_workflow = w.id_dim_workflow\nJOIN dim_data d ON fe.id_dim_data = d.id_dim_data\nJOIN data_atual da ON TRUE\nWHERE (d.ano * 10000 + d.mes * 100 + d.dia) >= \n      (EXTRACT(YEAR FROM da.hoje) * 10000 + EXTRACT(MONTH FROM da.hoje) * 100 + EXTRACT(DAY FROM da.hoje)) - 7\nGROUP BY w.nome_workflow, w.id_workflow_original\nORDER BY duracao_media DESC\nLIMIT 5;",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1640,
+                -1120
+            ],
+            "id": "a37fcde7-536a-4e2c-b66d-9fbde7fa389b",
+            "name": "top 5 duracao 7 dias",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "-- Contagem diária de execuções e falhas nos últimos 7 dias\nWITH data_atual AS (\n    SELECT CURRENT_DATE AS hoje\n),\ndatas AS (\n    SELECT \n        da.hoje - (generate_series(0, 6)) AS data_referencia\n    FROM \n        data_atual da\n)\nSELECT \n    TO_CHAR(d.data_referencia, 'YYYY-MM-DD') AS data,\n    COALESCE(e.total_execucoes, 0) AS total_execucoes,\n    COALESCE(f.total_falhas, 0) AS total_falhas,\n    CASE \n        WHEN COALESCE(e.total_execucoes, 0) = 0 THEN 0\n        ELSE ROUND((COALESCE(f.total_falhas, 0)::numeric / COALESCE(e.total_execucoes, 0)) * 100, 2)\n    END AS percentual_falhas,\n    '7 dias' AS periodo\nFROM \n    datas d\nLEFT JOIN (\n    SELECT \n        MAKE_DATE(d.ano, d.mes, d.dia) AS data_exec,\n        COUNT(*) AS total_execucoes\n    FROM \n        fato_execucao fe\n    JOIN \n        dim_data d ON fe.id_dim_data = d.id_dim_data\n    GROUP BY \n        MAKE_DATE(d.ano, d.mes, d.dia)\n) e ON d.data_referencia = e.data_exec\nLEFT JOIN (\n    SELECT \n        MAKE_DATE(d.ano, d.mes, d.dia) AS data_falha,\n        COUNT(*) AS total_falhas\n    FROM \n        fato_execucao fe\n    JOIN \n        dim_data d ON fe.id_dim_data = d.id_dim_data\n    WHERE \n        fe.finalizada = FALSE\n    GROUP BY \n        MAKE_DATE(d.ano, d.mes, d.dia)\n) f ON d.data_referencia = f.data_falha\nORDER BY \n    d.data_referencia;",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1900,
+                -1560
+            ],
+            "id": "d52f45b3-f15f-44c3-a3b5-e54147e4939e",
+            "name": "contagem diaria execucoes ultimos 7 dias",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "path": "relatorio_bi",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                1080,
+                -1480
+            ],
+            "id": "37407520-7209-4ac0-a469-b2a2a56511a3",
+            "name": "Webhook",
+            "webhookId": "37d08843-09d8-46db-9dea-444b4835ac0a"
+        },
+        {
+            "parameters": {
+                "html": "<!DOCTYPE html>\n<html lang=\"pt-BR\">\n\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Dashboard de Execuções</title>\n    <script src=\"https://cdn.tailwindcss.com\"></script>\n    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css\">\n    <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n    <style>\n        .card-hover:hover {\n            transform: translateY(-5px);\n            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);\n        }\n\n        .sidebar {\n            transition: all 0.3s;\n        }\n\n        .chart-container {\n            position: relative;\n            height: 300px;\n        }\n\n        .progress-bar {\n            height: 8px;\n            border-radius: 4px;\n            background-color: #e5e7eb;\n        }\n\n        .progress-bar-fill {\n            height: 100%;\n            border-radius: 4px;\n            transition: width 0.5s ease-in-out;\n        }\n    </style>\n</head>\n\n<body class=\"bg-gray-50 font-sans\">\n  \n    <div class=\"flex h-screen overflow-hidden\">\n        <!-- Sidebar -->\n        <div class=\"sidebar bg-indigo-700 text-white w-64 flex-shrink-0 hidden md:block\">\n            <div class=\"p-4\">\n                <h1 class=\"text-2xl font-bold flex items-center\">\n                    <i class=\"fas fa-chart-line mr-2\"></i>\n                    Workflow BI\n                </h1>\n            </div>\n            <nav class=\"mt-6\">\n                <div class=\"px-4 py-2 text-indigo-200 uppercase text-xs font-semibold tracking-wider\">\n                    Menu\n                </div>\n                <a href=\"#\" class=\"block px-4 py-3 text-white bg-indigo-800\">\n                    <i class=\"fas fa-home mr-3\"></i> Dashboard\n                </a>\n                <a href=\"#\" class=\"block px-4 py-3 text-indigo-200 hover:text-white hover:bg-indigo-600\">\n                    <i class=\"fas fa-tasks mr-3\"></i> Workflows\n                </a>\n                <a href=\"#\" class=\"block px-4 py-3 text-indigo-200 hover:text-white hover:bg-indigo-600\">\n                    <i class=\"fas fa-history mr-3\"></i> Histórico\n                </a>\n                <a href=\"#\" class=\"block px-4 py-3 text-indigo-200 hover:text-white hover:bg-indigo-600\">\n                    <i class=\"fas fa-exclamation-triangle mr-3\"></i> Falhas\n                </a>\n                <a href=\"#\" class=\"block px-4 py-3 text-indigo-200 hover:text-white hover:bg-indigo-600\">\n                    <i class=\"fas fa-cog mr-3\"></i> Configurações\n                </a>\n            </nav>\n        </div>\n\n        <!-- Main Content -->\n        <div class=\"flex-1 overflow-auto\">\n            <!-- Top Navigation -->\n            <header class=\"bg-white shadow-sm\">\n                <div class=\"flex justify-between items-center px-6 py-4\">\n                    <div class=\"flex items-center\">\n                        <button class=\"md:hidden text-gray-500 mr-4\">\n                            <i class=\"fas fa-bars text-xl\"></i>\n                        </button>\n                        <h2 class=\"text-xl font-semibold text-gray-800\">Dashboard de Execuções</h2>\n                    </div>\n                    <div class=\"flex items-center space-x-4\">\n                        <div class=\"relative\">\n                            <input type=\"text\" placeholder=\"Buscar...\"\n                                class=\"pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500\">\n                            <i class=\"fas fa-search absolute left-3 top-3 text-gray-400\"></i>\n                        </div>\n                        <div class=\"relative\">\n                            <button class=\"text-gray-500 hover:text-gray-700\">\n                                <i class=\"fas fa-bell text-xl\"></i>\n                                <span class=\"absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500\"></span>\n                            </button>\n                        </div>\n                    </div>\n                </div>\n            </header>\n\n            <!-- Main Content Area -->\n            <main class=\"p-6\">\n                <!-- Date Filter -->\n                <div class=\"flex justify-between items-center mb-6\">\n                    <div>\n                        <h3 class=\"text-lg font-semibold text-gray-800\">Visão Geral das Execuções</h3>\n                        <p class=\"text-gray-500\">Monitoramento em tempo real</p>\n                    </div>\n                    <div class=\"flex items-center space-x-2\">\n                        <button\n                            class=\"px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50\">\n                            <i class=\"fas fa-calendar-alt mr-2\"></i> Últimos 7 dias\n                        </button>\n                        <button class=\"px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700\">\n                            <i class=\"fas fa-download mr-2\"></i> Exportar\n                        </button>\n                    </div>\n                </div>\n\n                <!-- Metrics Cards -->\n                <div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6\">\n                    <div class=\"bg-white rounded-xl shadow-sm p-6 card-hover transition-all duration-300\">\n                        <div class=\"flex justify-between items-start\">\n                            <div>\n                                <p class=\"text-gray-500 text-sm font-medium\">Total Execuções</p>\n                                <h3 class=\"text-3xl font-bold text-gray-800 mt-1\">{{ $node['total execucoes 7 dias'].json.total_execucoes }}</h3>\n                                <!-- <p class=\"text-green-500 text-sm mt-2\">\n                                    <i class=\"fas fa-arrow-up mr-1\"></i> x% vs período anterior\n                                </p> -->\n                            </div>\n                            <div class=\"bg-indigo-100 p-3 rounded-lg\">\n                                <i class=\"fas fa-play-circle text-indigo-600 text-xl\"></i>\n                            </div>\n                        </div>\n                    </div>\n\n                    <div class=\"bg-white rounded-xl shadow-sm p-6 card-hover transition-all duration-300\">\n                        <div class=\"flex justify-between items-start\">\n                            <div>\n                                <p class=\"text-gray-500 text-sm font-medium\">Taxa de Sucesso</p>\n                                <h3 class=\"text-3xl font-bold text-gray-800 mt-1\">{{ $node['percentual sucesso e falha 7 dias'].json.percentual_sucesso }}%</h3>\n                                <!-- <p class=\"text-green-500 text-sm mt-2\">\n                                    <i class=\"fas fa-arrow-up mr-1\"></i> x% vs período anterior\n                                </p> -->\n                            </div>\n                            <div class=\"bg-green-100 p-3 rounded-lg\">\n                                <i class=\"fas fa-check-circle text-green-600 text-xl\"></i>\n                            </div>\n                        </div>\n                    </div>\n\n                    <div class=\"bg-white rounded-xl shadow-sm p-6 card-hover transition-all duration-300\">\n                        <div class=\"flex justify-between items-start\">\n                            <div>\n                                <p class=\"text-gray-500 text-sm font-medium\">Falhas</p>\n                                <h3 class=\"text-3xl font-bold text-gray-800 mt-1\">{{ $node['percentual sucesso e falha 7 dias'].json.percentual_falha }}%</h3>\n                                <!-- <p class=\"text-red-500 text-sm mt-2\">\n                                    <i class=\"fas fa-arrow-down mr-1\"></i> x% vs período anterior\n                                </p> -->\n                            </div>\n                            <div class=\"bg-red-100 p-3 rounded-lg\">\n                                <i class=\"fas fa-times-circle text-red-600 text-xl\"></i>\n                            </div>\n                        </div>\n                    </div>\n\n                    <div class=\"bg-white rounded-xl shadow-sm p-6 card-hover transition-all duration-300\">\n                        <div class=\"flex justify-between items-start\">\n                            <div>\n                                <p class=\"text-gray-500 text-sm font-medium\">Tempo Médio</p>\n                                <h3 class=\"text-3xl font-bold text-gray-800 mt-1\">{{ $node['duração média 7 dias'].json.duracao_media }}s</h3>\n                                <!-- <p class=\"text-yellow-500 text-sm mt-2\">\n                                    <i class=\"fas fa-arrow-up mr-1\"></i> x% vs período anterior\n                                </p> -->\n                            </div>\n                            <div class=\"bg-yellow-100 p-3 rounded-lg\">\n                                <i class=\"fas fa-clock text-yellow-600 text-xl\"></i>\n                            </div>\n                        </div>\n                    </div>\n                </div>\n\n                <!-- Charts Row -->\n                <div class=\"grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6\">\n                    <!-- Executions Over Time -->\n                    <div class=\"bg-white rounded-xl shadow-sm p-6\">\n                        <div class=\"flex justify-between items-center mb-4\">\n                            <h4 class=\"text-lg font-semibold text-gray-800\">Execuções ao Longo do Tempo</h4>\n                            <div class=\"flex space-x-2\">\n                                <button class=\"px-3 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-md\">Dia</button>\n                                <button\n                                    class=\"px-3 py-1 text-xs bg-white text-gray-500 border border-gray-300 rounded-md\">Semana</button>\n                                <button\n                                    class=\"px-3 py-1 text-xs bg-white text-gray-500 border border-gray-300 rounded-md\">Mês</button>\n                            </div>\n                        </div>\n                        <div class=\"chart-container\">\n                            <canvas id=\"executionsChart\"></canvas>\n                        </div>\n                    </div>\n\n                    <!-- Success/Failure Rate -->\n                    <div class=\"bg-white rounded-xl shadow-sm p-6\">\n                        <div class=\"flex justify-between items-center mb-4\">\n                            <h4 class=\"text-lg font-semibold text-gray-800\">Taxa de Sucesso/Falha</h4>\n                            <div class=\"flex space-x-2\">\n                                <button class=\"px-3 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-md\">7\n                                    dias</button>\n                                <button\n                                    class=\"px-3 py-1 text-xs bg-white text-gray-500 border border-gray-300 rounded-md\">30\n                                    dias</button>\n                            </div>\n                        </div>\n                        <div class=\"chart-container\">\n                            <canvas id=\"successRateChart\"></canvas>\n                        </div>\n                    </div>\n                </div>\n\n                <!-- Top Workflows -->\n                <div class=\"grid grid-cols-1 lg:grid-cols-3 gap-6\">\n                    <!-- Most Executed -->\n                    <div class=\"bg-white rounded-xl shadow-sm p-6\">\n                        <div class=\"flex justify-between items-center mb-4\">\n                            <h4 class=\"text-lg font-semibold text-gray-800\">Workflows Mais Executados</h4>\n                            <button class=\"text-indigo-600 text-sm font-medium\">Ver todos</button>\n                        </div>\n                        <div class=\"space-y-4\">\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-indigo-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-file-invoice text-indigo-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[0].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-001</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[0].total_execucoes }} exec.</span>\n                            </div>\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-blue-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-sync-alt text-blue-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[1].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-042</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[1].total_execucoes }} exec.</span>\n                            </div>\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-purple-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-envelope text-purple-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[2].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-015</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[2].total_execucoes }} exec.</span>\n                            </div>\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-green-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-database text-green-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[3].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-033</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_5_execucoes'].json.workflows[3].total_execucoes }} exec.</span>\n                            </div>\n                        </div>\n                    </div>\n\n                    <!-- Most Failures -->\n                    <div class=\"bg-white rounded-xl shadow-sm p-6\">\n                        <div class=\"flex justify-between items-center mb-4\">\n                            <h4 class=\"text-lg font-semibold text-gray-800\">Workflows com Mais Falhas</h4>\n                            <button class=\"text-indigo-600 text-sm font-medium\">Ver todos</button>\n                        </div>\n                        <div class=\"space-y-4\">\n                            <div>\n                                <div class=\"flex justify-between mb-1\">\n                                    <div class=\"flex items-center\">\n                                        <div class=\"bg-red-100 p-2 rounded-lg mr-3\">\n                                            <i class=\"fas fa-file-export text-red-600\"></i>\n                                        </div>\n                                        <div>\n                                            <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_falhas'].json.workflows[0].nome_workflow }}</p>\n                                            <!-- <p class=\"text-xs text-gray-500\">ID: WF-007</p> -->\n                                        </div>\n                                    </div>\n                                    <span class=\"font-semibold text-red-600\">{{ $node['array_top_5_falhas'].json.workflows[0].total_falhas }} falhas</span>\n                                </div>\n                                <div class=\"progress-bar\">\n                                    <div class=\"progress-bar-fill bg-red-500\" style=\"width: 80%\"></div>\n                                </div>\n                            </div>\n                            <div>\n                                <div class=\"flex justify-between mb-1\">\n                                    <div class=\"flex items-center\">\n                                        <div class=\"bg-orange-100 p-2 rounded-lg mr-3\">\n                                            <i class=\"fas fa-cloud-upload-alt text-orange-600\"></i>\n                                        </div>\n                                        <div>\n                                            <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_falhas'].json.workflows[1].nome_workflow }}</p>\n                                            <!-- <p class=\"text-xs text-gray-500\">ID: WF-019</p> -->\n                                        </div>\n                                    </div>\n                                    <span class=\"font-semibold text-red-600\">{{ $node['array_top_5_falhas'].json.workflows[1].total_falhas }} falhas</span>\n                                </div>\n                                <div class=\"progress-bar\">\n                                    <div class=\"progress-bar-fill bg-orange-400\" style=\"width: 60%\"></div>\n                                </div>\n                            </div>\n                            <div>\n                                <div class=\"flex justify-between mb-1\">\n                                    <div class=\"flex items-center\">\n                                        <div class=\"bg-yellow-100 p-2 rounded-lg mr-3\">\n                                            <i class=\"fas fa-cogs text-yellow-600\"></i>\n                                        </div>\n                                        <div>\n                                            <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_falhas'].json.workflows[2].nome_workflow }}</p>\n                                            <!-- <p class=\"text-xs text-gray-500\">ID: WF-025</p> -->\n                                        </div>\n                                    </div>\n                                    <span class=\"font-semibold text-red-600\">{{ $node['array_top_5_falhas'].json.workflows[2].total_falhas }} falhas</span>\n                                </div>\n                                <div class=\"progress-bar\">\n                                    <div class=\"progress-bar-fill bg-yellow-400\" style=\"width: 40%\"></div>\n                                </div>\n                            </div>\n                            <div>\n                                <div class=\"flex justify-between mb-1\">\n                                    <div class=\"flex items-center\">\n                                        <div class=\"bg-pink-100 p-2 rounded-lg mr-3\">\n                                            <i class=\"fas fa-file-import text-pink-600\"></i>\n                                        </div>\n                                        <div>\n                                            <p class=\"font-medium text-gray-800\">{{ $node['array_top_5_falhas'].json.workflows[3].nome_workflow }}</p>\n                                            <!-- <p class=\"text-xs text-gray-500\">ID: WF-011</p> -->\n                                        </div>\n                                    </div>\n                                    <span class=\"font-semibold text-red-600\">{{ $node['array_top_5_falhas'].json.workflows[3].total_falhas }} falhas</span>\n                                </div>\n                                <div class=\"progress-bar\">\n                                    <div class=\"progress-bar-fill bg-pink-400\" style=\"width: 30%\"></div>\n                                </div>\n                            </div>\n                        </div>\n                    </div>\n\n                    <!-- Longest Duration -->\n                    <div class=\"bg-white rounded-xl shadow-sm p-6\">\n                        <div class=\"flex justify-between items-center mb-4\">\n                            <h4 class=\"text-lg font-semibold text-gray-800\">Workflows Mais Longos</h4>\n                            <button class=\"text-indigo-600 text-sm font-medium\">Ver todos</button>\n                        </div>\n                        <div class=\"space-y-4\">\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-purple-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-chart-pie text-purple-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[0].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-005</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[0].duracao_media }}s</span>\n                            </div>\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-blue-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-file-pdf text-blue-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[1].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-028</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[1].duracao_media }}s</span>\n                            </div>\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-green-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-file-excel text-green-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[2].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-013</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[2].duracao_media }}s</span>\n                            </div>\n                            <div class=\"flex items-center justify-between\">\n                                <div class=\"flex items-center\">\n                                    <div class=\"bg-indigo-100 p-2 rounded-lg mr-3\">\n                                        <i class=\"fas fa-file-csv text-indigo-600\"></i>\n                                    </div>\n                                    <div>\n                                        <p class=\"font-medium text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[3].nome_workflow }}</p>\n                                        <!-- <p class=\"text-xs text-gray-500\">ID: WF-009</p> -->\n                                    </div>\n                                </div>\n                                <span class=\"font-semibold text-gray-800\">{{ $node['array_top_duracoes'].json.workflows[3].duracao_media }}s</span>\n                            </div>\n                        </div>\n                    </div>\n                </div>\n            </main>\n        </div>\n    </div>\n  \n    <div id=\"chart-data\" data-labels='{{ JSON.stringify($node[\"monta_dias_semana\"].json.data) }}'\n    data-execucoes='{{ JSON.stringify($node[\"monta_dias_semana\"].json.execucoes) }}'\n    data-sucess='{{ $node[\"percentual sucesso e falha 7 dias\"].json.percentual_sucesso }}'\n    data-failure='{{ $node[\"percentual sucesso e falha 7 dias\"].json.percentual_falha }}'>\n</div>\n\n    <script>\n        // Executions Over Time Chart\n       const chartData = document.getElementById('chart-data')\n    const labels = JSON.parse(chartData.dataset.labels)\n    const execucoes = JSON.parse(chartData.dataset.execucoes)\n        const executionsCtx = document.getElementById('executionsChart').getContext('2d');\n        const executionsChart = new Chart(executionsCtx, {\n            type: 'line',\n            data: {\n                labels: labels,\n                datasets: [\n                    {\n                        label: 'Execuções',\n                        data: execucoes,\n                        borderColor: '#6366F1',\n                        backgroundColor: 'rgba(99, 102, 241, 0.1)',\n                        borderWidth: 2,\n                        fill: true,\n                        tension: 0.4\n                    }\n                ]\n            },\n            options: {\n                responsive: true,\n                maintainAspectRatio: false,\n                plugins: {\n                    legend: {\n                        display: false\n                    }\n                },\n                scales: {\n                    y: {\n                        beginAtZero: true,\n                        grid: {\n                            drawBorder: false\n                        }\n                    },\n                    x: {\n                        grid: {\n                            display: false\n                        }\n                    }\n                }\n            }\n        });\n\n        // Success/Failure Rate Chart\n        const sucessValue = Math.round(parseFloat(chartData.dataset.sucess))\n        const failureValue = Math.round(parseFloat(chartData.dataset.failure))\n\n        console.log(\"Sucesso:\", sucessValue, \"Falha:\", failureValue);\n\n        const successRateCtx = document.getElementById('successRateChart').getContext('2d');\n        const successRateChart = new Chart(successRateCtx, {\n            type: 'doughnut',\n            data: {\n                labels: ['Sucesso', 'Falha'],\n                datasets: [{\n                    data: [sucessValue, failureValue],\n                    backgroundColor: ['#10B981', '#EF4444'],\n                    borderWidth: 0\n                }]\n            },\n            options: {\n                responsive: true,\n                maintainAspectRatio: false,\n                cutout: '70%',\n                plugins: {\n                    legend: {\n                        position: 'bottom',\n                        labels: {\n                            boxWidth: 12,\n                            padding: 20\n                        }\n                    }\n                }\n            }\n        });\n\n        // Mobile menu toggle\n        document.querySelector('.md\\\\:hidden').addEventListener('click', function () {\n            document.querySelector('.sidebar').classList.toggle('hidden');\n        });\n    </script>\n</body>\n\n</html>"
+            },
+            "type": "n8n-nodes-base.html",
+            "typeVersion": 1.2,
+            "position": [
+                2840,
+                -1460
+            ],
+            "id": "1879e439-d824-47f9-9328-b85769c80873",
+            "name": "HTML"
+        },
+        {
+            "parameters": {
+                "respondWith": "text",
+                "responseBody": "={{ $json.html }}",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                3100,
+                -1460
+            ],
+            "id": "fba1361b-7aa5-4108-b81f-20c52749dfe4",
+            "name": "Respond to Webhook"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT COUNT(*) AS total_execucoes\nFROM fato_execucao fe\nJOIN dim_data dd ON fe.id_dim_data = dd.id_dim_data\nWHERE TO_DATE(dd.ano || '-' || dd.mes || '-' || dd.dia, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '7 days';\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1660,
+                -1800
+            ],
+            "id": "d09f8055-6bcd-4f4a-876d-81d9ec37349b",
+            "name": "total execucoes 7 dias",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT \n  ROUND(100.0 * SUM(CASE WHEN finalizada THEN 1 ELSE 0 END) / COUNT(*), 2) AS percentual_sucesso,\n  ROUND(100.0 * SUM(CASE WHEN NOT finalizada THEN 1 ELSE 0 END) / COUNT(*), 2) AS percentual_falha\nFROM fato_execucao fe\nJOIN dim_data dd ON fe.id_dim_data = dd.id_dim_data\nWHERE TO_DATE(dd.ano || '-' || dd.mes || '-' || dd.dia, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '7 days';\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1900,
+                -1800
+            ],
+            "id": "feb7f3a8-763b-4fdc-9b72-b7b8c1442c40",
+            "name": "percentual sucesso e falha 7 dias",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT \n  ROUND(AVG(duracao)::numeric, 2) AS duracao_media\nFROM fato_execucao fe\nJOIN dim_data dd ON fe.id_dim_data = dd.id_dim_data\nWHERE TO_DATE(dd.ano || '-' || dd.mes || '-' || dd.dia, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '7 days';\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1660,
+                -1560
+            ],
+            "id": "5a39621d-9d71-406d-9908-492d1ea0e486",
+            "name": "duração média 7 dias",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "mode": "chooseBranch",
+                "numberInputs": 4
+            },
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 3.1,
+            "position": [
+                2620,
+                -1480
+            ],
+            "id": "cb3ce76c-86e0-4ba9-b091-6078bf0e1ad5",
+            "name": "Merge"
+        },
+        {
+            "parameters": {
+                "jsCode": "let execucoes = $input.first().json.total_execucoes.map(Number)\n\nlet data = $input.first().json.data.map(d => {\n  const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']\n  const dia = new Date(d)\n  return diasSemana[dia.getDay()]\n})\n\nreturn { execucoes, data }\n"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1900,
+                -1320
+            ],
+            "id": "f6c03b6e-ce5e-4b26-b823-b0edb4e6cb3b",
+            "name": "monta_dias_semana"
+        },
+        {
+            "parameters": {
+                "fieldsToAggregate": {
+                    "fieldToAggregate": [
+                        {
+                            "fieldToAggregate": "total_execucoes"
+                        },
+                        {
+                            "fieldToAggregate": "data"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.aggregate",
+            "typeVersion": 1,
+            "position": [
+                1640,
+                -1320
+            ],
+            "id": "e09e6463-9ea4-4bab-b217-c2047718916e",
+            "name": "Aggregate"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "-- Os 5 workflows mais executados nos últimos 7 dias\nWITH data_atual AS (\n    SELECT CURRENT_DATE AS hoje\n)\nSELECT \n    w.nome_workflow,\n    w.id_workflow_original,\n    COUNT(*) AS total_execucoes,\n    '7 dias' AS periodo\nFROM \n    fato_execucao fe\nJOIN \n    dim_workflow w ON fe.id_dim_workflow = w.id_dim_workflow\nJOIN \n    dim_data d ON fe.id_dim_data = d.id_dim_data\nJOIN \n    data_atual da ON TRUE\nWHERE \n    (d.ano * 10000 + d.mes * 100 + d.dia) >= \n    (EXTRACT(YEAR FROM da.hoje) * 10000 + EXTRACT(MONTH FROM da.hoje) * 100 + EXTRACT(DAY FROM da.hoje)) - 7\nGROUP BY \n    w.nome_workflow, w.id_workflow_original\nORDER BY \n    total_execucoes DESC\nLIMIT 5;\n",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1640,
+                -940
+            ],
+            "id": "a24113a3-5aa0-450e-b9ad-1c5064310dbc",
+            "name": "top 5 execucoes 7 dias",
+            "credentials": {
+                "postgres": {
+                    "id": "dul6kk7CAQwLK36U",
+                    "name": "postgres-n8n"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "aggregate": "aggregateAllItemData",
+                "destinationFieldName": "workflows",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.aggregate",
+            "typeVersion": 1,
+            "position": [
+                1920,
+                -940
+            ],
+            "id": "0f37c350-737e-4cf7-b0df-8f4f47f8dfa8",
+            "name": "array_top_5_execucoes"
+        },
+        {
+            "parameters": {
+                "aggregate": "aggregateAllItemData",
+                "destinationFieldName": "workflows",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.aggregate",
+            "typeVersion": 1,
+            "position": [
+                1900,
+                -1980
+            ],
+            "id": "2eb957f2-2b4f-444c-957a-17004b5f905d",
+            "name": "array_top_5_falhas"
+        },
+        {
+            "parameters": {
+                "content": "# CONSULTAS SQL",
+                "height": 1280,
+                "width": 540
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1580,
+                -2060
+            ],
+            "typeVersion": 1,
+            "id": "66da4aec-b9a1-45ff-8ece-146619a5f886",
+            "name": "Sticky Note"
+        },
+        {
+            "parameters": {
+                "aggregate": "aggregateAllItemData",
+                "destinationFieldName": "workflows",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.aggregate",
+            "typeVersion": 1,
+            "position": [
+                1860,
+                -1120
+            ],
+            "id": "4858c6bb-04ea-4b69-b7fe-0726b91d7eb4",
+            "name": "array_top_duracoes"
+        },
+        {
+            "parameters": {
+                "content": "# RECEBE REQUISIÇÃO",
+                "height": 1280,
+                "width": 280,
+                "color": 5
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                1040,
+                -2060
+            ],
+            "typeVersion": 1,
+            "id": "9bd2c47c-7a14-41b3-a351-ed37313657a7",
+            "name": "Sticky Note10"
+        },
+        {
+            "parameters": {
+                "content": "# TELA HTML",
+                "height": 1280,
+                "width": 200,
+                "color": 4
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                2560,
+                -2080
+            ],
+            "typeVersion": 1,
+            "id": "1547873b-b0f5-483b-b784-77dfc4e424bc",
+            "name": "Sticky Note11"
+        }
+    ],
+    "connections": {
+        "get executions": {
+            "main": [
+                [
+                    {
+                        "node": "se_falhou",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "trata_dados_execucoes": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split Out": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Loop Over Items": {
+            "main": [
+                [],
+                [
+                    {
+                        "node": "se_antes_do_timer",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "se_vazio",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_vazio": {
+            "main": [
+                [
+                    {
+                        "node": "cadastra_novo_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_id_dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "cadastra_novo_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "consulta_dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta_dim_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "retorna_id_dim_workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_id_dim_workflow": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "se_data_nao_existe",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insert_dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "consulta_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "mapeia_dados_etl": {
+            "main": [
+                [
+                    {
+                        "node": "insere_fato",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_id_dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta_dim_data": {
+            "main": [
+                [
+                    {
+                        "node": "retorna_id_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_hora": {
+            "main": [
+                [
+                    {
+                        "node": "se_hora_nao_existe",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insert_dim_hora": {
+            "main": [
+                [
+                    {
+                        "node": "consulta dim_hora1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "consulta dim_hora1": {
+            "main": [
+                [
+                    {
+                        "node": "retorna_id_dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_id_dim_hora": {
+            "main": [
+                [
+                    {
+                        "node": "mapeia_dados_etl",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insere_fato": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_data_nao_existe": {
+            "main": [
+                [
+                    {
+                        "node": "insert_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_id_dim_data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_hora_nao_existe": {
+            "main": [
+                [
+                    {
+                        "node": "insert_dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_id_dim_hora",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "When clicking ‘Test workflow’": {
+            "main": [
+                [
+                    {
+                        "node": "remove_tabelas",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "remove_tabelas": {
+            "main": [
+                [
+                    {
+                        "node": "cria_tabelas_dimensao",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "cria_tabelas_dimensao": {
+            "main": [
+                [
+                    {
+                        "node": "cria_tabela_fato",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "cria_tabela_fato": {
+            "main": [
+                [
+                    {
+                        "node": "cria_tabela_watermarks",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "cria_tabela_watermarks": {
+            "main": [
+                [
+                    {
+                        "node": "run",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Cron": {
+            "main": [
+                [
+                    {
+                        "node": "formata_timestamp",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "verifica_watermarks": {
+            "main": [
+                [
+                    {
+                        "node": "se_timestamp_vazio",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_timestamp_vazio": {
+            "main": [
+                [
+                    {
+                        "node": "insere_watermark",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "atualiza_watermark",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "insere_watermark": {
+            "main": [
+                []
+            ]
+        },
+        "formata_timestamp": {
+            "main": [
+                [
+                    {
+                        "node": "verifica_watermarks",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "retorna_timestamp": {
+            "main": [
+                [
+                    {
+                        "node": "get executions",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "atualiza_watermark": {
+            "main": [
+                [
+                    {
+                        "node": "subtrai_segundos",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "subtrai_segundos": {
+            "main": [
+                [
+                    {
+                        "node": "se_diferença_maior_que_10_segundos",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_antes_do_timer": {
+            "main": [
+                [],
+                [
+                    {
+                        "node": "trata_dados_execucoes",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_diferença_maior_que_10_segundos": {
+            "main": [
+                [
+                    {
+                        "node": "No Operation, do nothing1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "retorna_timestamp",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "se_falhou": {
+            "main": [
+                [],
+                [
+                    {
+                        "node": "Split Out",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "top 5 falhas 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "array_top_5_falhas",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "top 5 duracao 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "array_top_duracoes",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "contagem diaria execucoes ultimos 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "total execucoes 7 dias",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "top 5 falhas 7 dias",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "top 5 duracao 7 dias",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "top 5 execucoes 7 dias",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "HTML": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "total execucoes 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "percentual sucesso e falha 7 dias",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "percentual sucesso e falha 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "duração média 7 dias",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "duração média 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "contagem diaria execucoes ultimos 7 dias",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge": {
+            "main": [
+                [
+                    {
+                        "node": "HTML",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "monta_dias_semana": {
+            "main": [
+                [
+                    {
+                        "node": "Merge",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Aggregate": {
+            "main": [
+                [
+                    {
+                        "node": "monta_dias_semana",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "top 5 execucoes 7 dias": {
+            "main": [
+                [
+                    {
+                        "node": "array_top_5_execucoes",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "array_top_5_execucoes": {
+            "main": [
+                [
+                    {
+                        "node": "Merge",
+                        "type": "main",
+                        "index": 3
+                    }
+                ]
+            ]
+        },
+        "array_top_5_falhas": {
+            "main": [
+                [
+                    {
+                        "node": "Merge",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "array_top_duracoes": {
+            "main": [
+                [
+                    {
+                        "node": "Merge",
+                        "type": "main",
+                        "index": 2
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "a46402e6601b1a4fcde47d6199a3b63608f9b385f43509173dc38f13cc5fabab"
+    }
+}
